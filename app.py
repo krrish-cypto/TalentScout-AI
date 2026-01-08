@@ -10,24 +10,21 @@ import docx
 from fpdf import FPDF
 import matplotlib.pyplot as plt
 import numpy as np
-# --- 1. THIS MUST BE THE FIRST STREAMLIT COMMAND ---
+
+# --- 3. CACHING & CLIENT SETUP ---
+@st.cache_resource
+def get_groq_client():
+    if not api_key: return None
+    return Groq(api_key=api_key)
+
+client = get_groq_client()
+# --- CRITICAL FIX: PAGE CONFIG MUST BE THE FIRST STREAMLIT COMMAND ---
 st.set_page_config(
     page_title="TalentScout AI",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# --- 2. THEN load your environment variables ---
-load_dotenv()
-api_key = os.getenv("GROQ_API_KEY")
-
-# --- 3. THEN define the caching ---
-@st.cache_resource
-def get_groq_client():
-    if not api_key:
-        return None
-    return Groq(api_key=api_key)
 
 # --- CONFIGURATION ---
 GREETINGS = {"hi", "hello", "hey", "hii", "hiyo", "hiya", "hola", "namaste"}
@@ -35,24 +32,10 @@ SENSITIVE_FIELDS = {"Email Address", "Phone Number"}
 FAST_MODEL = "llama-3.1-8b-instant"
 SMART_MODEL = "llama-3.3-70b-versatile"
 
-# --- CRITICAL FIX: PAGE CONFIG MUST BE FIRST ---
-st.set_page_config(
-    page_title="TalentScout AI",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# --- NOW LOAD ENV AND CLIENT ---
+# --- LOAD SECRETS ---
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
 
-@st.cache_resource
-def get_groq_client():
-    if not api_key: return None
-    return Groq(api_key=api_key)
-
-client = get_groq_client()
 
 # --- CUSTOM CSS (Professional Theme) ---
 st.markdown("""
