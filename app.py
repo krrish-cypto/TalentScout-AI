@@ -11,6 +11,13 @@ from fpdf import FPDF
 import matplotlib.pyplot as plt
 import numpy as np
 
+st.set_page_config(
+    page_title="TalentScout AI",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 # [Past this into app.py replacing the existing API setup code]
 
 # --- CONFIGURATION ---
@@ -37,12 +44,7 @@ def get_groq_client(api_key):
 # Call the function with the key
 client = get_groq_client(api_key)
 
-st.set_page_config(
-    page_title="TalentScout AI",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+
 
 # --- CUSTOM CSS ---
 st.markdown("""
