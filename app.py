@@ -11,14 +11,7 @@ from fpdf import FPDF
 import matplotlib.pyplot as plt
 import numpy as np
 
-# --- 3. CACHING & CLIENT SETUP ---
-@st.cache_resource
-def get_groq_client():
-    if not api_key: return None
-    return Groq(api_key=api_key)
-
-client = get_groq_client()
-# --- CRITICAL FIX: PAGE CONFIG MUST BE THE FIRST STREAMLIT COMMAND ---
+# --- 1. CRITICAL: PAGE CONFIG MUST BE THE FIRST STREAMLIT COMMAND ---
 st.set_page_config(
     page_title="TalentScout AI",
     page_icon="⚡",
@@ -26,15 +19,22 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CONFIGURATION ---
-GREETINGS = {"hi", "hello", "hey", "hii", "hiyo", "hiya", "hola", "namaste"}
-SENSITIVE_FIELDS = {"Email Address", "Phone Number"}
-FAST_MODEL = "llama-3.1-8b-instant"
-SMART_MODEL = "llama-3.3-70b-versatile"
-
-# --- LOAD SECRETS ---
+# --- 2. SETUP & SECRETS ---
 load_dotenv()
-api_key = os.getenv("GROQ_API_KEY")
+
+# Try to get key from .env (local) or Streamlit Secrets (cloud)
+try:
+    api_key = os.getenv("GROQ_API_KEY") or st.secrets["GROQ_API_KEY"]
+except:
+    api_key = None
+
+# --- 3. CACHING & CLIENT SETUP ---
+@st.cache_resource
+def get_groq_client():
+    if not api_key: return None
+    return Groq(api_key=api_key)
+
+client = get_groq_client()
 
 
 # --- CUSTOM CSS (Professional Theme) ---
