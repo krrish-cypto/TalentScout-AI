@@ -17,6 +17,15 @@ SENSITIVE_FIELDS = {"Email Address", "Phone Number"}
 FAST_MODEL = "llama-3.1-8b-instant"
 SMART_MODEL = "llama-3.3-70b-versatile"
 
+# --- CRITICAL FIX: PAGE CONFIG MUST BE FIRST ---
+st.set_page_config(
+    page_title="TalentScout AI",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# --- NOW LOAD ENV AND CLIENT ---
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
 
@@ -27,17 +36,11 @@ def get_groq_client():
 
 client = get_groq_client()
 
-st.set_page_config(
-    page_title="TalentScout AI",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 # --- CUSTOM CSS (Professional Theme) ---
 st.markdown("""
     <style>
     .stApp {
+# ... rest of your code remains exactly the same ...
         background: linear-gradient(to bottom right, #f8f9fa, #eef2f3);
         font-family: 'Inter', sans-serif;
     }
