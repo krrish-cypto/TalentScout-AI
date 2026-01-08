@@ -170,9 +170,9 @@ This ensures the candidate confirms the specific role they are applying for, rat
 ## 🛠️ Setup
 
 ### Prerequisites
--Python 3.8+
--Groq API Key
--Libraries: streamlit, groq, python-dotenv, PyPDF2, python-docx, fpdf, matplotlib
+- Python 3.8+
+- Groq API Key
+- Libraries: streamlit, groq, python-dotenv, PyPDF2, python-docx, fpdf, matplotlib
 
 ### Installation Instructions
 
