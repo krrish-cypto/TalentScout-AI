@@ -95,7 +95,7 @@ Bot: [Generates evaluation with Radar Chart and PDF download]
    - Response Format: JSON-only for structured output.
 
 ### Architecture
-
+'''
 ┌───────────────────────────────────────────────────┐
 │              Streamlit Frontend UI                │
 │       (Sidebar, Chat Interface, File Uploader)    │
@@ -123,6 +123,7 @@ Bot: [Generates evaluation with Radar Chart and PDF download]
 │   • Matplotlib (Radar Charts for Skills)        │
 │   • FPDF (PDF Document Creation)                │
 └─────────────────────────────────────────────────┘
+'''
 
 ## 💡 Prompt Design
 
