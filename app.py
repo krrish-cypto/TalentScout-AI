@@ -10,6 +10,24 @@ import docx
 from fpdf import FPDF
 import matplotlib.pyplot as plt
 import numpy as np
+# --- 1. THIS MUST BE THE FIRST STREAMLIT COMMAND ---
+st.set_page_config(
+    page_title="TalentScout AI",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# --- 2. THEN load your environment variables ---
+load_dotenv()
+api_key = os.getenv("GROQ_API_KEY")
+
+# --- 3. THEN define the caching ---
+@st.cache_resource
+def get_groq_client():
+    if not api_key:
+        return None
+    return Groq(api_key=api_key)
 
 # --- CONFIGURATION ---
 GREETINGS = {"hi", "hello", "hey", "hii", "hiyo", "hiya", "hola", "namaste"}
