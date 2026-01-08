@@ -2,36 +2,31 @@ import streamlit as st
 import os
 import json
 import re
+import tempfile
 from groq import Groq
 from dotenv import load_dotenv
+import PyPDF2
+import docx
+from fpdf import FPDF
+import matplotlib.pyplot as plt
+import numpy as np
 
-# Simple greetings set to detect casual 'hi' messages
-GREETINGS = {"hi", "hello", "hey", "hii", "hiyo", "hiya"}
-# Fields that deserve explicit reassurance when requested
+# --- CONFIGURATION ---
+GREETINGS = {"hi", "hello", "hey", "hii", "hiyo", "hiya", "hola", "namaste"}
 SENSITIVE_FIELDS = {"Email Address", "Phone Number"}
+FAST_MODEL = "llama-3.1-8b-instant"
+SMART_MODEL = "llama-3.3-70b-versatile"
 
-# 1. Setup & Caching
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
 
-# --- PERFORMANCE OPTIMIZATION: CACHING ---
-# We cache the client to prevent re-initialization on every script rerun.
-# This ensures efficiency under "multiple user inputs".
 @st.cache_resource
 def get_groq_client():
-    if not api_key:
-        return None
+    if not api_key: return None
     return Groq(api_key=api_key)
 
 client = get_groq_client()
 
-# --- PERFORMANCE OPTIMIZATION: HYBRID MODELS ---
-# Use a lightweight, blazing fast model for the chat loop (Low Latency)
-FAST_MODEL = "llama-3.1-8b-instant" 
-# Use a heavy reasoning model for the final report (High Quality)
-SMART_MODEL = "llama-3.3-70b-versatile"
-
-# --- UI CONFIGURATION ---
 st.set_page_config(
     page_title="TalentScout AI",
     page_icon="⚡",
@@ -39,7 +34,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CUSTOM CSS (Optimized for Aesthetics) ---
+# --- CUSTOM CSS (Professional Theme) ---
 st.markdown("""
     <style>
     .stApp {
@@ -72,9 +67,6 @@ st.markdown("""
         font-weight: 600;
         transition: all 0.2s ease;
     }
-    div.stButton > button:hover {
-        transform: scale(1.02);
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -82,101 +74,87 @@ if not client:
     st.error("❌ Error: GROQ_API_KEY not found. Please check your .env file.")
     st.stop()
 
-# Helper: clean assistant responses so chat doesn't display raw code blocks
+# --- HELPER FUNCTIONS ---
 def clean_response_text(text: str) -> str:
-    if not text:
-        return ""
-    # Remove code fences like ``` or ```json
-    text = re.sub(r"```(?:json)?\n?", "", text)
-    text = text.replace('```', '')
-    text = text.strip()
-    # If text is JSON, pretty-print it for storage/display
-    try:
-        parsed = json.loads(text)
-        return json.dumps(parsed, indent=2)
-    except Exception:
-        return text
+    """Smartly extracts JSON from mixed text."""
+    if not text: return ""
+    match = re.search(r"\{[\s\S]*\}", text)
+    if match:
+        text = match.group(0)
+    else:
+        text = re.sub(r"```(?:json)?\n?", "", text)
+        text = text.replace('```', '')
+    return text.strip()
 
-
-# --- Validation Helpers ---
 def is_valid_email(email: str) -> bool:
-    if not email:
-        return False
-    email = email.strip()
-    # Basic email regex: local@domain.tld (keeps it permissive)
-    return re.match(r"^[\w\.-]+@[\w\.-]+\.[A-Za-z]{2,}$", email) is not None
-
+    if not email: return False
+    return re.match(r"^[\w\.-]+@[\w\.-]+\.[A-Za-z]{2,}$", email.strip()) is not None
 
 def is_valid_phone(phone: str) -> bool:
-    if not phone:
-        return False
-    # Allow digits, spaces, dashes, parentheses and leading +
+    if not phone: return False
     digits = re.sub(r"\D", "", phone)
     return 7 <= len(digits) <= 15
 
-
-# --- TRANSLATIONS ---
+# --- TRANSLATIONS & LANGUAGE HELPERS ---
 TRANSLATIONS = {
     "English": {
-        "greeting": "Hello! I'm TalentScout, your hiring assistant. Nice to meet you. Before we begin, a quick note: your responses are confidential and used only to assess fit for the role. Could you please tell me your {field}?",
+        "greeting": "Hello! I'm TalentScout. Nice to meet you. Before we begin, a quick note: your responses are confidential. Could you please tell me your {field}?",
         "thanks_brief": "Thanks {name} — could you provide your {field}?",
-        "thanks_sensitive": "Thanks {name} — to help me tailor the interview and evaluation to you, could you provide your {field}? I treat this information confidentially and only use it for this assessment.",
-        "phase_transition": "Thank you {name} — that's very helpful. I will now ask a few technical questions based on your stack.",
-        "invalid_email": "That doesn't look like a valid email address. Please enter it in the format name@example.com.",
-        "invalid_phone": "That doesn't look like a valid phone number. Please enter digits only or include country code, e.g. +1-555-123-4567.",
+        "thanks_sensitive": "Thanks {name} — to help me tailor the interview, could you provide your {field}? (Confidential)",
+        "phase_transition": "Thank you {name}. I have your details. I will now ask a few technical questions based on your stack: {stack}.",
+        "invalid_email": "That doesn't look like a valid email address.",
+        "invalid_phone": "That doesn't look like a valid phone number.",
     },
     "Hindi": {
-        "greeting": "नमस्ते! मैं TalentScout हूँ, आपका भर्ती सहायक। आपसे मिलकर खुशी हुई। शुरुआत से पहले एक बात: आपकी प्रतिक्रियाएं गोपनीय हैं और केवल भूमिका के लिए फिट मूल्यांकन के लिए उपयोग की जाती हैं। कृपया मुझे अपना {field} बताएं?",
+        "greeting": "नमस्ते! मैं TalentScout हूँ। शुरुआत से पहले: आपकी प्रतिक्रियाएं गोपनीय हैं। कृपया मुझे अपना {field} बताएं?",
         "thanks_brief": "धन्यवाद {name} — क्या आप अपना {field} प्रदान कर सकते हैं?",
-        "thanks_sensitive": "धन्यवाद {name} — आपकी प्राथमिकताओं के अनुसार साक्षात्कार तैयार करने के लिए, क्या आप अपना {field} दे सकते हैं? मैं इस जानकारी को गोपनीय रखता हूँ और केवल इस मूल्यांकन के लिए उपयोग करता हूँ।",
-        "phase_transition": "धन्यवाद {name} — यह बहुत मददगार है। अब मैं आपके स्टैक के आधार पर कुछ तकनीकी प्रश्न पूछूंगा।",
-        "invalid_email": "यह एक मान्य ईमेल पता नहीं लगता है। कृपया इसे name@example.com प्रारूप में दर्ज करें।",
-        "invalid_phone": "यह एक मान्य फोन नंबर नहीं लगता है। कृपया केवल अंकों या देश कोड के साथ दर्ज करें, उदा. +1-555-123-4567।",
+        "thanks_sensitive": "धन्यवाद {name} — क्या आप अपना {field} दे सकते हैं? यह गोपनीय है।",
+        "phase_transition": "धन्यवाद {name}। अब मैं आपके स्टैक के आधार पर कुछ तकनीकी प्रश्न पूछूंगा: {stack}।",
+        "invalid_email": "यह मान्य ईमेल नहीं है।",
+        "invalid_phone": "यह मान्य फोन नंबर नहीं है।",
     },
     "Spanish": {
-        "greeting": "¡Hola! Soy TalentScout, tu asistente de contratación. Me da gusto conocerte. Antes de comenzar, una nota: tus respuestas son confidenciales y se utilizan solo para evaluar tu compatibilidad con el puesto. ¿Podrías decirme tu {field}?",
+        "greeting": "¡Hola! Soy TalentScout. Tus respuestas son confidenciales. ¿Podrías decirme tu {field}?",
         "thanks_brief": "Gracias {name} — ¿Podrías proporcionar tu {field}?",
-        "thanks_sensitive": "Gracias {name} — para personalizar la entrevista y evaluación, ¿podrías proporcionar tu {field}? Trato tu información de forma confidencial y solo la utilizo para esta evaluación.",
-        "phase_transition": "Gracias {name} — eso es muy útil. Ahora te haré algunas preguntas técnicas basadas en tu stack.",
-        "invalid_email": "Eso no parece una dirección de correo válida. Por favor, ingrésala en el formato nombre@ejemplo.com.",
-        "invalid_phone": "Eso no parece un número de teléfono válido. Por favor, ingresa solo dígitos o incluye el código de país, p. ej. +1-555-123-4567.",
+        "thanks_sensitive": "Gracias {name} — ¿Podrías proporcionar tu {field}? Es confidencial.",
+        "phase_transition": "Gracias {name}. Ahora haré preguntas técnicas basadas en tu stack: {stack}.",
+        "invalid_email": "Correo no válido.",
+        "invalid_phone": "Teléfono no válido.",
     },
     "French": {
-        "greeting": "Bonjour ! Je suis TalentScout, votre assistant de recrutement. Enchanté de vous rencontrer. Avant de commencer, une note : vos réponses sont confidentielles et utilisées uniquement pour évaluer votre adéquation au poste. Pouvez-vous me dire votre {field} ?",
+        "greeting": "Bonjour ! Je suis TalentScout. Vos réponses sont confidentielles. Pouvez-vous me dire votre {field} ?",
         "thanks_brief": "Merci {name} — pourriez-vous fournir votre {field} ?",
-        "thanks_sensitive": "Merci {name} — pour adapter l'entretien et l'évaluation à vous, pourriez-vous fournir votre {field} ? Je traite ces informations de manière confidentielle et ne les utilise que pour cette évaluation.",
-        "phase_transition": "Merci {name} — c'est très utile. Je vais maintenant vous poser quelques questions techniques basées sur votre stack.",
-        "invalid_email": "Cela ne semble pas être une adresse e-mail valide. Veuillez l'entrer au format nom@exemple.com.",
-        "invalid_phone": "Cela ne semble pas être un numéro de téléphone valide. Veuillez entrer uniquement des chiffres ou inclure l'indicatif du pays, par ex. +1-555-123-4567.",
+        "thanks_sensitive": "Merci {name} — pourriez-vous fournir votre {field} ? C'est confidentiel.",
+        "phase_transition": "Merci {name}. Je vais maintenant poser des questions techniques sur votre stack : {stack}.",
+        "invalid_email": "E-mail non valide.",
+        "invalid_phone": "Numéro de téléphone non valide.",
     },
     "German": {
-        "greeting": "Hallo! Ich bin TalentScout, Ihr Einstellungsassistent. Freut mich, Sie kennenzulernen. Bevor wir beginnen, ein wichtiger Hinweis: Ihre Antworten sind vertraulich und werden nur zur Bewertung Ihrer Eignung für die Stelle verwendet. Könnten Sie mir Ihren {field} mitteilen?",
+        "greeting": "Hallo! Ich bin TalentScout. Ihre Antworten sind vertraulich. Könnten Sie mir Ihren {field} mitteilen?",
         "thanks_brief": "Danke {name} — könnten Sie Ihren {field} angeben?",
-        "thanks_sensitive": "Danke {name} — um das Interview und die Bewertung auf Sie abzustimmen, könnten Sie Ihren {field} angeben? Ich behandle diese Informationen vertraulich und nutze sie nur für diese Bewertung.",
-        "phase_transition": "Danke {name} — das ist sehr hilfreich. Ich werde Ihnen nun einige technische Fragen basierend auf Ihrem Stack stellen.",
-        "invalid_email": "Das sieht nicht wie eine gültige E-Mail-Adresse aus. Bitte geben Sie sie im Format name@beispiel.com ein.",
-        "invalid_phone": "Das sieht nicht wie eine gültige Telefonnummer aus. Bitte geben Sie nur Ziffern ein oder fügen Sie die Ländervorwahl hinzu, z. B. +1-555-123-4567.",
+        "thanks_sensitive": "Danke {name} — könnten Sie Ihren {field} angeben? Dies ist vertraulich.",
+        "phase_transition": "Danke {name}. Ich werde nun technische Fragen zu Ihrem Stack stellen: {stack}.",
+        "invalid_email": "Ungültige E-Mail.",
+        "invalid_phone": "Ungültige Telefonnummer.",
     },
     "Hinglish": {
-        "greeting": "Hii! Main TalentScout hoon, aapka hiring assistant. Aapse milke bahut khushi hui! Shuru karne se pehle ek baat - aapke answers bilkul confidential hain aur sirf role ke liye aapka fit check karne ke liye use honge. Kya aap mujhe apna {field} bata sakte ho?",
+        "greeting": "Hii! Main TalentScout hoon. Start karne se pehle - aapke answers confidential hain. Kya aap mujhe apna {field} bata sakte ho?",
         "thanks_brief": "Thanks {name} — aap apna {field} de sakte ho?",
-        "thanks_sensitive": "Shukriya {name} — aapke liye interview ko tailor karne ke liye, aap apna {field} share kar sakte ho? Main aapki information ko confidential rakhta hoon aur sirf is assessment ke liye use karta hoon.",
-        "phase_transition": "Shukriya {name} — ye bahut helpful tha! Ab main aapke stack ke based pe kuch technical questions puchta hoon.",
-        "invalid_email": "Ye valid email address nahi lag raha. Kya aap ise name@example.com format mein daalenge?",
-        "invalid_phone": "Ye valid phone number nahi lag raha. Kya aap country code ke saath digits daal sakte ho? Jaise +1-555-123-4567?",
+        "thanks_sensitive": "Shukriya {name} — aap apna {field} share kar sakte ho? Ye confidential hai.",
+        "phase_transition": "Shukriya {name}! Ab main aapke stack ke based pe technical questions puchta hoon: {stack}.",
+        "invalid_email": "Ye valid email nahi lag raha.",
+        "invalid_phone": "Ye valid phone number nahi lag raha.",
     },
 }
 
-
-def get_translation(lang: str, key: str, field: str = "", name: str = "") -> str:
+def get_translation(lang: str, key: str, field: str = "", name: str = "", stack: str = "") -> str:
     """Get translation for a key in the given language. Fallback to English if not found."""
     if lang not in TRANSLATIONS:
         lang = "English"
-    message = TRANSLATIONS[lang].get(key, TRANSLATIONS["English"][key])
-    # Format with field and/or name; strip extra spaces if name is empty
-    formatted = message.format(field=field, name=f"{name}" if name else "")
-    return formatted.strip()
-
+    message = TRANSLATIONS[lang].get(key, TRANSLATIONS["English"].get(key, ""))
+    
+    # Safely format the message with available placeholders
+    return message.format(field=field, name=name, stack=stack)
 
 def detect_hinglish(text: str) -> bool:
     """Detect if text is in Hinglish (Roman-script Hindi with English words)."""
@@ -189,78 +167,272 @@ def detect_hinglish(text: str) -> bool:
     }
     words = text.lower().split()
     hinglish_word_count = sum(1 for w in words if any(w.startswith(h) or w.endswith(h) for h in hinglish_indicators))
-    return hinglish_word_count >= len(words) * 0.3  # 30% Hinglish words threshold
+    return hinglish_word_count >= len(words) * 0.3
 
+# --- RESUME PARSING ---
+def extract_text_from_pdf(file):
+    pdf_reader = PyPDF2.PdfReader(file)
+    text = ""
+    for page in pdf_reader.pages:
+        text += page.extract_text()
+    return text
+
+def extract_text_from_docx(file):
+    doc = docx.Document(file)
+    return "\n".join([paragraph.text for paragraph in doc.paragraphs])
+
+def parse_resume_with_ai(text):
+    # NOTE: "Desired Position" is EXCLUDED here so the bot asks for it later.
+    prompt = f"""
+    Extract the following fields from the resume text below.
+    Return ONLY valid JSON.
+    Keys: "Full Name", "Email Address", "Phone Number", "Years of Experience", "Current Location", "Tech Stack".
+    
+    IMPORTANT: 
+    - DO NOT extract "Desired Position". We will ask the user for this.
+    - If "Tech Stack" is scattered, combine it into a comma-separated string.
+    - If a field is missing, use null.
+    
+    Resume Text:
+    {text[:4000]}
+    """
+    try:
+        completion = client.chat.completions.create(
+            model=FAST_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            response_format={"type": "json_object"} 
+        )
+        content = completion.choices[0].message.content
+        content = clean_response_text(content)
+        return json.loads(content)
+    except Exception as e:
+        st.error(f"Resume Parsing Error: {e}")
+        return {}
+
+# --- INTELLIGENT INPUT PROCESSOR ---
+def process_user_input(user_input, current_field, language="English"):
+    prompt = f"""
+    You are an AI Interviewer ({language}). 
+    We are currently asking the candidate for: "{current_field}".
+    User Input: "{user_input}"
+    
+    TASK:
+    1. If the user is providing the answer, extract ONLY the value. Set "is_answer": true.
+    2. If the user is asking a QUESTION (e.g., "Why do you need this?", "What is this for?"):
+       - Explain the reason professionally.
+       - Set "is_answer": false.
+    3. If user says "skip", extracted_value: "Skipped".
+    
+    RETURN JSON ONLY:
+    {{
+        "is_answer": boolean,
+        "extracted_value": string or null,
+        "response_message": string (required if is_answer is false)
+    }}
+    """
+    try:
+        completion = client.chat.completions.create(
+            model=FAST_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
+        return json.loads(completion.choices[0].message.content)
+    except:
+        return {"is_answer": True, "extracted_value": user_input}
+
+# --- PDF & GRAPH ---
+def create_radar_chart(scores):
+    categories = list(scores.keys())
+    values = list(scores.values())
+    
+    values += values[:1]
+    angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
+    angles += angles[:1]
+    
+    fig, ax = plt.subplots(figsize=(5, 5), subplot_kw=dict(polar=True))
+    ax.fill(angles, values, color='#4A90E2', alpha=0.15)
+    ax.plot(angles, values, color='#4A90E2', linewidth=2)
+    
+    # Simplified Graph Scale (0-100)
+    ax.set_ylim(0, 100)
+    ax.set_yticks([20, 40, 60, 80, 100])
+    ax.set_yticklabels(["20", "40", "60", "80", "100"], color="grey", size=8)
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(categories, size=10)
+    
+    temp_chart = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    plt.savefig(temp_chart.name, format='png', bbox_inches='tight')
+    plt.close()
+    return temp_chart.name
+
+class PDFReport(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 15)
+        self.cell(0, 10, 'TalentScout AI - Candidate Evaluation', 0, 1, 'C')
+        self.ln(5)
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+
+def generate_pdf_report(data):
+    pdf = PDFReport()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    # Details
+    pdf.cell(0, 10, f"Candidate Name: {str(data.get('name', 'N/A')).encode('latin-1', 'replace').decode('latin-1')}", ln=True)
+    pdf.cell(0, 10, f"Position: {str(data.get('position', 'N/A')).encode('latin-1', 'replace').decode('latin-1')}", ln=True)
+    
+    # Tech Stack (wrapped with multi_cell)
+    pdf.ln(2)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, "Tech Stack:", ln=True)
+    pdf.set_font("Arial", size=11)
+    tech_stack_text = str(data.get('tech_stack', 'N/A')).encode('latin-1', 'replace').decode('latin-1')
+    pdf.multi_cell(0, 7, tech_stack_text)
+    
+    pdf.ln(5)
+    
+    # Verdict
+    verdict = data.get('verdict', 'Pending')
+    color = (0, 128, 0) if "Hire" in verdict else (255, 0, 0)
+    pdf.set_text_color(*color)
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, f"VERDICT: {verdict}", ln=True)
+    pdf.set_text_color(0, 0, 0)
+    
+    # Graph + Summary
+    scores = {
+        "Tech": data.get("technical_score", 0),
+        "Comm": data.get("communication_score", 0),
+        "Prob Solv": data.get("problem_solving_score", 0),
+        "Exp Fit": data.get("experience_relevance", 0)
+    }
+    chart_path = create_radar_chart(scores)
+    
+    # Add Chart
+    pdf.image(chart_path, x=60, y=None, w=90)
+    os.unlink(chart_path)
+    
+    # Add Graph Summary (New Feature)
+    pdf.ln(5)
+    pdf.set_font("Arial", 'I', 11)
+    pdf.set_text_color(100, 100, 100) # Grey color for explanation
+    summary_text = f"Graph Interpretation: {data.get('graph_summary', 'Analysis of core competencies.')}"
+    # Clean unicode for PDF
+    summary_text = str(summary_text).encode('latin-1', 'replace').decode('latin-1')
+    pdf.multi_cell(0, 7, summary_text, align='C')
+    pdf.set_text_color(0, 0, 0) # Reset color
+    
+    # Strengths
+    pdf.ln(10)
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 10, "Strengths:", ln=True)
+    pdf.set_font("Arial", size=11)
+    for s in data.get('strengths', []): 
+        s = str(s).encode('latin-1', 'replace').decode('latin-1')
+        pdf.cell(0, 7, f"- {s}", ln=True)
+    
+    # Improvements
+    pdf.ln(5)
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 10, "Improvements:", ln=True)
+    pdf.set_font("Arial", size=11)
+    for i in data.get('improvement_areas', []): 
+        i = str(i).encode('latin-1', 'replace').decode('latin-1')
+        pdf.cell(0, 7, f"- {i}", ln=True)
+    
+    return pdf.output(dest="S").encode("latin-1")
+
+# --- SESSION STATE ---
+if "messages" not in st.session_state: st.session_state.messages = []
+if "phase" not in st.session_state: st.session_state.phase = "gathering_info"
+if "collected_info" not in st.session_state: st.session_state.collected_info = {}
+if "resume_uploaded" not in st.session_state: st.session_state.resume_uploaded = False
+
+REQUIRED_FIELDS = ["Full Name", "Email Address", "Phone Number", "Years of Experience", "Desired Position(s)", "Current Location", "Tech Stack"]
+
+# --- HELPER: FIND NEXT MISSING FIELD ---
+def get_next_missing_field():
+    for field in REQUIRED_FIELDS:
+        if field not in st.session_state.collected_info:
+            return field
+    return None
 
 # --- HEADER ---
 c1, c2, c3 = st.columns([1, 8, 1])
 with c2:
     st.markdown('<div class="main-header">TalentScout AI</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">High-Performance • Multilingual • Sentiment-Aware</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">High-Performance • Multilingual • Resume Parsing</div>', unsafe_allow_html=True)
 
-# --- SIDEBAR CONFIGURATION ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/4712/4712035.png", width=50)
-    st.markdown("### ⚡ Performance Mode")
     
-    # Language Selector
     language_options = {"English": "🇺🇸", "Hindi": "🇮🇳", "Spanish": "🇪🇸", "French": "🇫🇷", "German": "🇩🇪"}
     selected_lang = st.selectbox("Language", list(language_options.keys()), format_func=lambda x: f"{language_options[x]} {x}")
     
     st.divider()
+    st.markdown("### 📄 Upload Resume")
+    uploaded_file = st.file_uploader("Upload PDF, DOCX, or TXT", type=["pdf", "docx", "txt"])
     
-    # Controls
+    if uploaded_file and not st.session_state.resume_uploaded:
+        with st.spinner("Parsing resume with AI..."):
+            try:
+                # Text Extraction
+                file_text = ""
+                if uploaded_file.type == "application/pdf":
+                    file_text = extract_text_from_pdf(uploaded_file)
+                elif "wordprocessingml" in uploaded_file.type:
+                    file_text = extract_text_from_docx(uploaded_file)
+                else:
+                    file_text = str(uploaded_file.read(), "utf-8")
+                
+                # AI Parsing
+                extracted_data = parse_resume_with_ai(file_text)
+                
+                # Fill Info
+                if extracted_data:
+                    found_fields = []
+                    for key, value in extracted_data.items():
+                        if value and str(value).lower() != "null" and key in REQUIRED_FIELDS:
+                            st.session_state.collected_info[key] = str(value)
+                            found_fields.append(key)
+                    
+                    st.session_state.resume_uploaded = True
+                    st.success(f"✅ Extracted: {', '.join(found_fields[:3])}...")
+            except Exception as e:
+                st.error(f"Error parsing file: {e}")
+
+    st.divider()
     if st.button("🔄 Start New Interview", use_container_width=True):
-        st.session_state.messages = []
-        if "last_report" in st.session_state:
-            del st.session_state.last_report
+        st.session_state.clear()
         st.rerun()
 
 # --- SYSTEM PROMPT ---
+info_summary = ", ".join([f"{k}: {v}" for k, v in st.session_state.collected_info.items()])
+next_missing = get_next_missing_field()
+
 system_prompt = f"""
 You are 'TalentScout', an AI recruiter.
-CURRENT LANGUAGE: {selected_lang} (Speak ONLY in {selected_lang}, unless user speaks English).
-
+CURRENT LANGUAGE: {selected_lang}.
+CANDIDATE INFO KNOWN: {info_summary}
 PROTOCOL:
-1. **Greeting**: Brief & professional.
-2. **Info Gathering**: Ask ONE BY ONE: Name, Email, Experience, Position, Tech Stack.
-3. **Logic**:
-   - Exp < 2y: Ask basics.
-   - Exp > 5y: Ask architecture/advanced.
-4. **Tech Round**: Ask 3-4 short, sharp technical questions based on stack.
-5. **End**: If user says "exit" or "done", conclude.
-
-KEEP RESPONSES CONCISE (Max 2-3 sentences) to ensure speed.
+1. If all info is known (Tech Stack, etc), START TECHNICAL INTERVIEW immediately.
+2. If info is missing ({next_missing}), ask for it specifically.
+3. If technical interview, ask questions based on: {st.session_state.collected_info.get('Tech Stack', 'General')}.
+KEEP RESPONSES CONCISE.
 """
-# Ensure the session's system prompt always matches the selected language
-if "messages" not in st.session_state or not st.session_state.messages:
+
+if not st.session_state.messages:
     st.session_state.messages = [{"role": "system", "content": system_prompt}]
 else:
-    # update existing system message when language selection changes
-    if st.session_state.messages[0].get("role") == "system" and st.session_state.messages[0].get("content") != system_prompt:
-        st.session_state.messages[0]["content"] = system_prompt
+    st.session_state.messages[0]["content"] = system_prompt
 
-# Initialize interview collection state
-if "phase" not in st.session_state:
-    st.session_state.phase = "gathering_info"  # gathering_info -> technical_interview
-if "required_fields" not in st.session_state:
-    st.session_state.required_fields = [
-        "Full Name",
-        "Email Address",
-        "Phone Number",
-        "Years of Experience",
-        "Desired Position(s)",
-        "Current Location",
-        "Tech Stack",
-    ]
-if "info_index" not in st.session_state:
-    st.session_state.info_index = 0
-if "collected_info" not in st.session_state:
-    st.session_state.collected_info = {}
-
-# (No automatic first prompt so assistant can respond to user's initial greeting)
-
-# --- MAIN CHAT LOOP ---
+# --- MAIN CHAT UI ---
 chat_container = st.container()
 
 with chat_container:
@@ -270,215 +442,147 @@ with chat_container:
             with st.chat_message(message["role"], avatar=avatar):
                 st.markdown(message["content"])
 
+# --- RESUME TRANSITION LOGIC ---
+if st.session_state.resume_uploaded and len(st.session_state.messages) == 1:
+    next_field = get_next_missing_field()
+    name = st.session_state.collected_info.get("Full Name", "Candidate")
+    
+    if next_field:
+        st.session_state.phase = "gathering_info"
+        msg = get_translation(selected_lang, "greeting", field=next_field, name=name)
+    else:
+        st.session_state.phase = "technical_interview"
+        stack = st.session_state.collected_info.get("Tech Stack", "")
+        msg = get_translation(selected_lang, "phase_transition", name=name, stack=stack)
+    
+    st.session_state.messages.append({"role": "assistant", "content": msg})
+    st.rerun()
+
+# --- INPUT HANDLER ---
 if prompt := st.chat_input("Type your response..."):
-    # 1. User Input
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(prompt)
+    with st.chat_message("user", avatar="👤"): st.markdown(prompt)
 
-    # 2. Either handle info-gathering locally, or call the model for technical Q/A
-    # If we're still gathering basic info, collect answers locally and prompt next field
+    # 1. INFO GATHERING
     if st.session_state.phase == "gathering_info":
-        idx = st.session_state.info_index
-        fields = st.session_state.required_fields
-        # Save user's answer for the current field — but ignore casual greetings at start
-        current_field = fields[idx] if idx < len(fields) else None
-        normalized = prompt.strip().lower()
-        
-        # Auto-detect Hinglish from user input
-        detected_hinglish = detect_hinglish(prompt)
-        lang_to_use = "Hinglish" if detected_hinglish else selected_lang
-        
-        if idx == 0 and normalized in GREETINGS:
-            # User said 'hi' — respond with a friendly, reassuring greeting then ask for Full Name
-            assistant_text = get_translation(lang_to_use, "greeting", current_field)
-            st.session_state.messages.append({"role": "assistant", "content": assistant_text})
-            with st.chat_message("assistant", avatar="🤖"):
-                st.markdown(assistant_text)
+        current_field = get_next_missing_field()
+        lang_to_use = selected_lang
+        if detect_hinglish(prompt): lang_to_use = "Hinglish"
+
+        # Handle Start (No Resume)
+        if not st.session_state.collected_info and prompt.lower() in GREETINGS:
+             assistant_text = get_translation(lang_to_use, "greeting", current_field)
+             st.session_state.messages.append({"role": "assistant", "content": assistant_text})
+             with st.chat_message("assistant", avatar="🤖"): st.markdown(assistant_text)
         else:
-            invalid = False
-            # Allow skipping Full Name with "skip" or "next"
-            skip_keywords = {"skip", "next", "continue", "proceed"}
-            if current_field == "Full Name" and normalized in skip_keywords:
-                # Skip name but advance to next field
-                st.session_state.info_index = idx + 1
-                if st.session_state.info_index < len(fields):
-                    next_field = fields[st.session_state.info_index]
-                    # Get the user's name from collected info if available
-                    user_name = st.session_state.collected_info.get("Full Name", "")
-                    if next_field in SENSITIVE_FIELDS:
-                        assistant_text = get_translation(lang_to_use, "thanks_sensitive", next_field, user_name)
-                    else:
-                        assistant_text = get_translation(lang_to_use, "thanks_brief", next_field, user_name)
-                    st.session_state.messages.append({"role": "assistant", "content": assistant_text})
-                    with st.chat_message("assistant", avatar="🤖"):
-                        st.markdown(assistant_text)
+            # INTELLIGENT PROCESSING
+            processed = process_user_input(prompt, current_field, lang_to_use)
+            
+            if not processed["is_answer"]:
+                response = processed["response_message"]
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                with st.chat_message("assistant", avatar="🤖"): st.markdown(response)
             else:
-                # Validate sensitive fields before storing
-                if current_field == "Email Address":
-                    if not is_valid_email(prompt):
-                        invalid = True
-                        assistant_text = get_translation(lang_to_use, "invalid_email")
-                        st.session_state.messages.append({"role": "assistant", "content": assistant_text})
-                        with st.chat_message("assistant", avatar="🤖"):
-                            st.markdown(assistant_text)
-                elif current_field == "Phone Number":
-                    if not is_valid_phone(prompt):
-                        invalid = True
-                        assistant_text = get_translation(lang_to_use, "invalid_phone")
-                        st.session_state.messages.append({"role": "assistant", "content": assistant_text})
-                        with st.chat_message("assistant", avatar="🤖"):
-                            st.markdown(assistant_text)
-
-                # If valid (or not a sensitive field), store and advance
+                answer_val = processed.get("extracted_value", prompt)
+                
+                # Validate
+                invalid = False
+                if current_field == "Email Address" and not is_valid_email(answer_val):
+                    invalid = True
+                    msg = get_translation(lang_to_use, "invalid_email")
+                    st.session_state.messages.append({"role": "assistant", "content": msg})
+                    with st.chat_message("assistant", avatar="🤖"): st.markdown(msg)
+                elif current_field == "Phone Number" and not is_valid_phone(answer_val):
+                    invalid = True
+                    msg = get_translation(lang_to_use, "invalid_phone")
+                    st.session_state.messages.append({"role": "assistant", "content": msg})
+                    with st.chat_message("assistant", avatar="🤖"): st.markdown(msg)
+                
                 if not invalid:
-                    if current_field:
-                        st.session_state.collected_info[current_field] = prompt.strip()
-                    # Advance to next field
-                    st.session_state.info_index = idx + 1
-
-                    # If there are more fields, ask next one
-                    if st.session_state.info_index < len(fields):
-                        next_field = fields[st.session_state.info_index]
-                        # Get the user's name from collected info if available
-                        user_name = st.session_state.collected_info.get("Full Name", "")
-                        # Only add explicit confidentiality language for sensitive fields,
-                        # otherwise keep the prompt concise and natural.
-                        if next_field in SENSITIVE_FIELDS:
-                            assistant_text = get_translation(lang_to_use, "thanks_sensitive", next_field, user_name)
-                        else:
-                            assistant_text = get_translation(lang_to_use, "thanks_brief", next_field, user_name)
-                        st.session_state.messages.append({"role": "assistant", "content": assistant_text})
-                        with st.chat_message("assistant", avatar="🤖"):
-                            st.markdown(assistant_text)
+                    if current_field: st.session_state.collected_info[current_field] = answer_val
+                    
+                    next_f = get_next_missing_field()
+                    if next_f:
+                        name = st.session_state.collected_info.get("Full Name", "")
+                        key = "thanks_sensitive" if next_f in SENSITIVE_FIELDS else "thanks_brief"
+                        msg = get_translation(lang_to_use, key, field=next_f, name=name)
+                        st.session_state.messages.append({"role": "assistant", "content": msg})
+                        with st.chat_message("assistant", avatar="🤖"): st.markdown(msg)
                     else:
-                        # All info collected -> switch phase
                         st.session_state.phase = "technical_interview"
-                        user_name = st.session_state.collected_info.get("Full Name", "")
-                        assistant_text = get_translation(lang_to_use, "phase_transition", name=user_name)
-                        st.session_state.messages.append({"role": "assistant", "content": assistant_text})
-                        with st.chat_message("assistant", avatar="🤖"):
-                            st.markdown(assistant_text)
-        # Do not call the model while gathering info
+                        name = st.session_state.collected_info.get("Full Name", "")
+                        stack = st.session_state.collected_info.get("Tech Stack", "")
+                        msg = get_translation(lang_to_use, "phase_transition", name=name, stack=stack)
+                        st.session_state.messages.append({"role": "assistant", "content": msg})
+                        with st.chat_message("assistant", avatar="🤖"): st.markdown(msg)
+
+    # 2. TECHNICAL INTERVIEW
     else:
         with st.chat_message("assistant", avatar="🤖"):
+            placeholder = st.empty()
+            full_resp = ""
             try:
-                # We use the FAST_MODEL for instant feedback
                 stream = client.chat.completions.create(
-                    model=FAST_MODEL, 
+                    model=FAST_MODEL,
                     messages=st.session_state.messages,
                     stream=True,
                     temperature=0.6,
-                    max_tokens=250 # Limit output tokens for faster return
+                    max_tokens=250
                 )
-                
-                # Manually stream chunks so we can sanitize code fences as they arrive
-                container = st.empty()
-                full_text = ""
-                try:
-                    for chunk in stream:
-                        # chunk may provide the content in choices[0].delta.content
-                        try:
-                            part = chunk.choices[0].delta.content or ""
-                        except Exception:
-                            part = str(chunk)
-                        # Remove any code fences that would render as code blocks
-                        part_clean = re.sub(r"```(?:json)?\n?", "", part)
-                        part_clean = part_clean.replace('```', '')
-                        full_text += part_clean
-                        container.markdown(full_text)
-                except Exception:
-                    # Fallback: attempt to render with write_stream if manual iteration fails
-                    raw_response = st.write_stream(stream)
-                    full_text = raw_response or full_text
-
-                cleaned = clean_response_text(full_text)
-                st.session_state.messages.append({"role": "assistant", "content": cleaned})
-                
+                for chunk in stream:
+                    content = chunk.choices[0].delta.content
+                    if content:
+                        full_resp += content
+                        placeholder.markdown(full_resp + "▌")
+                placeholder.markdown(full_resp)
+                st.session_state.messages.append({"role": "assistant", "content": full_resp})
             except Exception as e:
                 st.error(f"Error: {e}")
 
-# --- REPORT GENERATION (Optimized for Quality) ---
+# --- REPORT SECTION ---
 with st.sidebar:
     st.divider()
     st.markdown("### 📊 Evaluation")
-    
-    if st.button("📝 Generate Report", type="primary", use_container_width=True):
-        if len(st.session_state.messages) < 6:
+    if st.button("📝 Generate Report", type="primary"):
+        if len(st.session_state.messages) < 4:
             st.toast("⚠️ Chat more to get a report!", icon="⚠️")
         else:
-            with st.spinner("🧠 Analyzing profile with High-Reasoning Model..."):
-                # Analysis Prompt
-                analysis_prompt = st.session_state.messages + [{
-                    "role": "user", 
-                    "content": f"""
-                    Generate JSON evaluation ({selected_lang} context).
-                    Fields: name, position, tech_stack, technical_score (0-100), communication_score (0-100), 
-                    sentiment_mood (1 word), strengths (list), improvement_areas (list), verdict ("Hire"/"No Hire"/"Maybe").
-                    Return ONLY JSON.
-                    """
-                }]
-                
+            with st.spinner("Analyzing candidate..."):
+                prompt_text = """
+                Generate JSON evaluation.
+                Fields: name, position, tech_stack, 
+                technical_score (0-100), communication_score (0-100), problem_solving_score (0-100), experience_relevance (0-100),
+                verdict (Hire/No Hire/Maybe), strengths (list), improvement_areas (list),
+                graph_summary (1 brief sentence explaining what the scores mean for this candidate).
+                """
+                msgs = st.session_state.messages + [{"role": "user", "content": prompt_text}]
                 try:
-                    # We switch to SMART_MODEL for the complex analysis task
-                    completion = client.chat.completions.create(
+                    res = client.chat.completions.create(
                         model=SMART_MODEL,
-                        messages=analysis_prompt,
-                        temperature=0.1,
+                        messages=msgs,
                         response_format={"type": "json_object"}
                     )
-                    
-                    data = json.loads(completion.choices[0].message.content)
-                    st.session_state.last_report = data
+                    report = json.loads(res.choices[0].message.content)
+                    st.session_state.last_report = report
                     st.toast("Report Ready!", icon="✅")
-                    
                 except Exception as e:
                     st.error(f"Analysis failed: {e}")
 
-# --- DASHBOARD ---
+# --- DASHBOARD & PDF DOWNLOAD ---
 if "last_report" in st.session_state:
-    data = st.session_state.last_report
+    r = st.session_state.last_report
     st.markdown("---")
-    st.subheader(f"📋 {data.get('name', 'Candidate')}")
+    st.subheader(f"Evaluation: {r.get('name', 'Candidate')}")
     
-    c1, c2, c3, c4 = st.columns(4)
-    tech = data.get('technical_score')
-    comm = data.get('communication_score')
-    # Display as X/100 (handle missing values)
-    c1.metric("Tech Score", f"{tech if tech is not None else 'N/A'}/100")
-    c2.metric("Comm. Score", f"{comm if comm is not None else 'N/A'}/100")
-    c3.metric("Mood", data.get('sentiment_mood'))
-
-    # Overall score: average of available numeric scores (normalized to /100)
-    numeric_scores = [s for s in (tech, comm) if isinstance(s, (int, float))]
-    if numeric_scores:
-        overall = round(sum(numeric_scores) / len(numeric_scores))
-        c4.metric("Overall Score", f"{overall}/100")
-        # Graphical progress bar (0-100)
-        st.progress(int(overall))
-        # Optionally show a colored badge for rating
-        if overall >= 75:
-            st.success(f"Performance: {overall}/100 — Strong")
-        elif overall >= 50:
-            st.info(f"Performance: {overall}/100 — Average")
-        else:
-            st.warning(f"Performance: {overall}/100 — Needs Improvement")
-    else:
-        c4.metric("Overall Score", "N/A")
-
-    # Verdict displayed below metrics
-    verdict = data.get('verdict', 'N/A')
-    color = "green" if "Hire" in verdict else "red"
-    st.markdown(f"**Verdict:** <span style='color:{color};font-weight:700'>{verdict}</span>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Tech Score", r.get('technical_score'))
+    c2.metric("Comm Score", r.get('communication_score'))
+    c3.metric("Verdict", r.get('verdict'))
     
-    with st.expander("🔍 Detailed Analysis"):
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("**Strengths**")
-            for s in data.get('strengths', []): st.write(f"• {s}")
-        with c2:
-            st.markdown("**Improvements**")
-            for i in data.get('improvement_areas', []): st.write(f"• {i}")
-            
-    # Download
-    st.download_button("📥 Download JSON", json.dumps(data, indent=2), "report.json", "application/json", type="secondary")
+    try:
+        pdf_bytes = generate_pdf_report(r)
+        d1, d2 = st.columns(2)
+        d1.download_button("📥 Download JSON", json.dumps(r, indent=2), "report.json", "application/json")
+        d2.download_button("📄 Download PDF Report", pdf_bytes, "candidate_report.pdf", "application/pdf")
+    except Exception as e:
+        st.error(f"PDF Generation Error: {e}")

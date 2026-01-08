@@ -2,6 +2,7 @@
 venv/
 env/
 ENV/
+.venv
 
 # Python
 __pycache__/
@@ -25,23 +26,20 @@ wheels/
 .installed.cfg
 *.egg
 
-# IDE
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+
+# OS
 .DS_Store
+Thumbs.db
 
 # Environment variables
 .env
 .env.local
 
-# OS
-Thumbs.db
-.DS_Store
-
-# Project specific
+# Logs
 *.log
-*.sqlite
-*.db
