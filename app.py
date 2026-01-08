@@ -3,15 +3,7 @@ import os
 import json
 import re
 import tempfile
-from groq import Groq
-from dotenv import load_dotenv
-import PyPDF2
-import docx
-from fpdf import FPDF
-import matplotlib.pyplot as plt
-import numpy as np
-
-# --- 1. CRITICAL: PAGE CONFIG MUST BE THE FIRST STREAMLIT COMMAND ---
+# 1. Force Page Config to be the VERY FIRST Streamlit command
 st.set_page_config(
     page_title="TalentScout AI",
     page_icon="⚡",
@@ -19,22 +11,42 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. SETUP & SECRETS ---
+# 2. Fix Matplotlib for Cloud (Must be before importing pyplot)
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
+
+from groq import Groq
+from dotenv import load_dotenv
+import PyPDF2
+import docx
+from fpdf import FPDF
+
+# --- SETUP & SECRETS ---
 load_dotenv()
 
-# Try to get key from .env (local) or Streamlit Secrets (cloud)
-try:
-    api_key = os.getenv("GROQ_API_KEY") or st.secrets["GROQ_API_KEY"]
-except:
-    api_key = None
+# Robust API Key Retrieval
+def get_api_key():
+    # Try local .env
+    key = os.getenv("GROQ_API_KEY")
+    # Try Streamlit Secrets
+    if not key:
+        try:
+            key = st.secrets["GROQ_API_KEY"]
+        except:
+            pass
+    return key
 
-# --- 3. CACHING & CLIENT SETUP ---
+api_key = get_api_key()
+
+# --- CACHING & CLIENT SETUP ---
 @st.cache_resource
-def get_groq_client():
-    if not api_key: return None
-    return Groq(api_key=api_key)
+def get_groq_client(key):
+    if not key: return None
+    return Groq(api_key=key)
 
-client = get_groq_client()
+client = get_groq_client(api_key)
 
 
 # --- CUSTOM CSS (Professional Theme) ---
