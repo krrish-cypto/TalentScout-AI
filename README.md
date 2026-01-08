@@ -134,76 +134,79 @@ The prompt engineering approach now includes **Contextual Intent Detection** and
 ### 1. Intelligent Input Processor
 
 Before accepting user input as an answer, the system evaluates intent:
-
+```
 TASK:
 1. If user answers, extract value. Set "is_answer": true.
 2. If user asks (Why?), explain reason. Set "is_answer": false.
 3. If "skip", value: "Skipped".
+```
 This prevents the bot from blindly saving "Why do you need this?" as a user's phone number.
 
-2. Resume Parsing Strategy
+### 2. Resume Parsing Strategy
 The Resume Parser is instructed to ignore specific fields to force verification:
-
+```
 "Extract keys: Name, Email, Stack...
 IMPORTANT: DO NOT extract 'Desired Position'. We will ask the user for this."
+```
 This ensures the candidate confirms the specific role they are applying for, rather than the bot guessing from a generic resume summary.
 
-3. PDF & Graph Generation
-Visuals: A Radar Chart is generated using matplotlib to visualize Technical vs. Communication vs. Experience scores on a 0-100 scale.
+### 3. PDF & Graph Generation
+- **Visuals**: A Radar Chart is generated using matplotlib to visualize Technical vs. Communication vs. Experience scores on a 0-100 scale.
 
-Summary: The AI generates a 1-sentence "Graph Interpretation" summary included in the PDF to explain the metrics to human recruiters.
+- **Summary**: The AI generates a 1-sentence "Graph Interpretation" summary included in the PDF to explain the metrics to human recruiters.
 
-🎨 UI/UX Features
-Professional Theme: Clean gradient backgrounds (#f8f9fa to #eef2f3) for a modern corporate look.
+## 🎨 UI/UX Features
 
-Sidebar Controls: Integrated Resume Uploader and Language Selector.
+- **Professional Theme**: Clean gradient backgrounds (#f8f9fa to #eef2f3) for a modern corporate look.
 
-Dynamic Feedback: Toast notifications ("Report Ready!", "Resume Parsed!") for system status.
+- **Sidebar Controls**: Integrated Resume Uploader and Language Selector.
 
-Responsive Charts: Radar charts that simplify complex scoring into visual polygons.
+- **Dynamic Feedback**: Toast notifications ("Report Ready!", "Resume Parsed!") for system status.
 
-Error Handling: Graceful handling of invalid file types or API timeouts.
+- **Responsive Charts**: Radar charts that simplify complex scoring into visual polygons.
 
-🛠️ Setup
-Prerequisites
-Python 3.8+
+- **Error Handling**: Graceful handling of invalid file types or API timeouts.
 
-Groq API Key
+## 🛠️ Setup
 
-Libraries: streamlit, groq, python-dotenv, PyPDF2, python-docx, fpdf, matplotlib
+### Prerequisites
+-Python 3.8+
+-Groq API Key
+-Libraries: streamlit, groq, python-dotenv, PyPDF2, python-docx, fpdf, matplotlib
 
-Installation Instructions
-Step 1: Clone the repository
+### Installation Instructions
 
-Bash
-
+**Step 1: Clone the repository**
+```bash
 git clone [https://github.com/yourusername/TalentScout_Chatbot.git](https://github.com/yourusername/TalentScout_Chatbot.git)
 cd TalentScout_Chatbot
-Step 2: Install dependencies
+```
 
-Bash
-
+**Step 2: Install dependencies**
+```bash
 pip install -r requirements.txt
-Step 3: Configure API Key Create a .env file in the project root:
+```
 
+**Step 3: Configure API Key**
+Create a .env file in the project root:
+```
 GROQ_API_KEY=your_groq_api_key_here
-Step 4: Run the application
+```
 
-Bash
-
+**Step 4: Run the application**
+```bash
 streamlit run app.py
-📊 Report Metrics
-Radar Chart: Visualizes balance between Tech, Comm, Problem Solving, and Fit.
+```
 
-Technical Score: 0-100 (coding skills, stack depth).
+## 📊 Report Metrics
+- **Radar Chart**: Visualizes balance between Tech, Comm, Problem Solving, and Fit.
+- **Technical Score**: 0-100 (coding skills, stack depth).
+- **Communication Score**: 0-100 (clarity, articulation).
+- **Verdict**: Hire / No Hire / Maybe.
+- **Graph Summary**: AI-generated insight explaining the scores.
 
-Communication Score: 0-100 (clarity, articulation).
-
-Verdict: Hire / No Hire / Maybe.
-
-Graph Summary: AI-generated insight explaining the scores.
-
-Report Output Example (PDF)
+### Report Output Example (PDF)
+```
 Header: Candidate Name & Position
 
 Body: Detailed Tech Stack (text-wrapped)
@@ -211,21 +214,30 @@ Body: Detailed Tech Stack (text-wrapped)
 Visual: Blue Polygon Radar Chart
 
 Analysis: Strengths, Improvements, and Hiring Verdict
+```
 
-🧠 Challenges & Solutions
-Challenge 1: Resume "Blindness" regarding Intent
-Problem: Resumes list history, not necessarily the next role the candidate wants. Solution: The parser explicitly excludes "Desired Position," forcing the chatbot to ask, "Which position are you applying for?" This ensures the interview context is accurate.
+## 🧠 Challenges & Solutions
 
-Challenge 2: PDF Text Overflow
-Problem: Long Tech Stacks (e.g., "Python, Java, React, Docker, Kubernetes...") would cut off the page in standard PDF generation. Solution: Switched from cell() to multi_cell() in FPDF, allowing dynamic text wrapping and automatic line breaks for content-heavy sections.
+### Challenge 1: Resume "Blindness" regarding Intent
 
-Challenge 3: Handling User Curiosity
-Problem: Users asking "Why do you need my phone number?" were previously ignored or treated as providing invalid data. Solution: Implemented an intermediate LLM check (process_user_input) that classifies the user's message. If it's a question, the bot answers it without advancing the interview stage.
+**Problem**: Resumes list history, not necessarily the next role the candidate wants. 
+**Solution**: The parser explicitly excludes "Desired Position," forcing the chatbot to ask, "Which position are you applying for?" This ensures the interview context is accurate.
 
-👤 Author
+### Challenge 2: PDF Text Overflow
+
+**Problem**: Long Tech Stacks (e.g., "Python, Java, React, Docker, Kubernetes...") would cut off the page in standard PDF generation. 
+**Solution**: Switched from cell() to multi_cell() in FPDF, allowing dynamic text wrapping and automatic line breaks for content-heavy sections.
+
+### Challenge 3: Handling User Curiosity
+
+**Problem**: Users asking "Why do you need my phone number?" were previously ignored or treated as providing invalid data. 
+**Solution**: Implemented an intermediate LLM check (process_user_input) that classifies the user's message. If it's a question, the bot answers it without advancing the interview stage.
+
+## 👤 Author
 TalentScout AI Development Team
 
 Github: github.com/talentscout-ai
 
-📄 License
-This project is licensed under the MIT License.
+## 📄 License
+
+📄 License This project is licensed under the MIT License.
