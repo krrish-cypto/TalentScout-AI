@@ -1,61 +1,53 @@
-🤖 TalentScout AI - Intelligent Hiring Assistant
+# TalentScout AI
 
-📌 Project Overview
+> **High-Performance • Multilingual • Sentiment-Aware**
 
-TalentScout AI is a high-performance recruitment chatbot designed to automate the screening process for technical candidates. Built with Streamlit and Groq (LLaMA-3), it features a hybrid-model architecture to ensure instant responses while delivering deep analytical insights.
+An intelligent AI-powered recruiting chatbot built with **Streamlit** and **Groq LLMs** for seamless candidate screening and evaluation.
 
-🚀 Key Features (Milestones Achieved)
+## 🚀 Features
 
-Hybrid AI Architecture: * Chat Loop: Uses Llama-3.1-8b-Instant for ultra-low latency (<300ms) conversation.
+- **Multi-Phase Interview**: Automated info gathering → technical questioning
+- **Multilingual Support**: English, Hindi, Spanish, French, German, Hinglish
+- **Smart Validation**: Email and phone number verification
+- **Dual Model Strategy**: 
+    - Fast model (llama-3.1-8b) for chat speed
+    - Smart model (llama-3.3-70b) for detailed analysis
+- **Auto-Detection**: Hinglish language recognition
+- **JSON Reports**: Structured candidate evaluation with scores and verdicts
+- **Session Caching**: Optimized performance with Streamlit's `@st.cache_resource`
 
-Analysis Core: Uses Llama-3.3-70b-Versatile for generating complex candidate dossiers.
+## 📋 Interview Flow
 
-Multilingual Support: Conducts interviews in English, Hindi, Spanish, French, German, and Hinglish.
+1. **Greeting** → Professional introduction
+2. **Info Gathering** → Name, Email, Phone, Experience, Position, Location, Tech Stack
+3. **Technical Round** → 3-4 dynamic questions based on candidate's stack
+4. **Report Generation** → Automated evaluation with hiring recommendation
 
-State-Driven Logic: Ensures all critical fields (Name, Email, Tech Stack) are gathered before the technical round begins.
+## 🛠️ Setup
 
-Sentiment & Behavioral Analysis: Generates a JSON evaluation report assessing the candidate's confidence and technical depth.
+```bash
+# Install dependencies
+pip install streamlit groq python-dotenv
 
-🛠️ Installation & Setup
+# Create .env file
+echo "GROQ_API_KEY=your_api_key_here" > .env
 
-Clone the Repository
-
-git clone <your-repo-link-here>
-cd TalentScout-AI
-
-
-Install Dependencies
-
-pip install -r requirements.txt
-
-
-Configure API Key
-Create a file named .env in the root directory and add your Groq API key:
-
-GROQ_API_KEY=gsk_yoursupersecretkey...
-
-
-Run the Application
-
+# Run app
 streamlit run app.py
+```
 
+## 📊 Report Metrics
 
-🧠 Prompt Engineering Strategy
+- **Technical Score**: 0-100
+- **Communication Score**: 0-100
+- **Sentiment Mood**: 1-word mood assessment
+- **Verdict**: Hire / No Hire / Maybe
+- **Strengths & Improvement Areas**: Detailed feedback
 
-The chatbot uses a Role-Playing System Prompt with strict constraints:
+## 🌐 Supported Languages
 
-Conciseness: The prompt restricts responses to 2-3 sentences to keep the chat fast.
+🇺🇸 English | 🇮🇳 Hindi | 🇪🇸 Spanish | 🇫🇷 French | 🇩🇪 German | 🇮🇳 Hinglish
 
-Context Management: st.session_state is used to maintain conversation history, ensuring the AI remembers the candidate's name and tech stack throughout the session.
+## 📥 Export
 
-Security: Prompt injection protection is managed by validating inputs (e.g., email regex) before passing them to the model.
-
-📁 Project Structure
-
-app.py: Main application logic and UI.
-
-requirements.txt: Python dependencies.
-
-.env: Configuration for API keys (not included in repo).
-
-Submitted for the AI/ML Intern Assignment.
+Download candidate reports as JSON for integration with your ATS or HR tools.
