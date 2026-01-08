@@ -11,21 +11,31 @@ from fpdf import FPDF
 import matplotlib.pyplot as plt
 import numpy as np
 
+# [Past this into app.py replacing the existing API setup code]
+
 # --- CONFIGURATION ---
 GREETINGS = {"hi", "hello", "hey", "hii", "hiyo", "hiya", "hola", "namaste"}
 SENSITIVE_FIELDS = {"Email Address", "Phone Number"}
 FAST_MODEL = "llama-3.1-8b-instant"
 SMART_MODEL = "llama-3.3-70b-versatile"
 
-load_dotenv()
-api_key = os.getenv("GROQ_API_KEY")
+# IMPROVED KEY LOADING
+try:
+    # Try loading from Streamlit secrets (Cloud)
+    api_key = st.secrets["GROQ_API_KEY"]
+except (FileNotFoundError, KeyError):
+    # Fallback to .env (Local)
+    load_dotenv()
+    api_key = os.getenv("GROQ_API_KEY")
 
+# Pass api_key as an argument so the cache invalidates if the key changes
 @st.cache_resource
-def get_groq_client():
+def get_groq_client(api_key):
     if not api_key: return None
     return Groq(api_key=api_key)
 
-client = get_groq_client()
+# Call the function with the key
+client = get_groq_client(api_key)
 
 st.set_page_config(
     page_title="TalentScout AI",
