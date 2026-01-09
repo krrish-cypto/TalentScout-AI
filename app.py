@@ -68,11 +68,18 @@ st.markdown("""
         text-align: center;
         margin-bottom: 2rem;
     }
+    /* --- UPDATED CHAT MESSAGE STYLING --- */
     .stChatMessage {
+        background-color: #ffffff; /* Force white background for bubble */
         border-radius: 12px;
         padding: 12px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         border: 1px solid #f0f0f0;
+    }
+    
+    /* Force text color to be dark inside chat messages */
+    .stChatMessage p, .stChatMessage div {
+        color: #000000 !important;
     }
     div.stButton > button {
         border-radius: 8px;
