@@ -234,9 +234,9 @@ Analysis: Strengths, Improvements, and Hiring Verdict
 **Solution**: Implemented an intermediate LLM check (process_user_input) that classifies the user's message. If it's a question, the bot answers it without advancing the interview stage.
 
 ## 👤 Author
-TalentScout AI Development Team
+Krishna Dubey
 
-Github: github.com/talentscout-ai
+Github: https://github.com/krrish-cypto/TalentScout-AI.git
 
 ## 📄 License
 
